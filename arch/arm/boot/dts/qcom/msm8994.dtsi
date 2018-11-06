@@ -2586,16 +2586,46 @@
 		qcom,tomtom-mclk-clk-freq = <9600000>;
 		pinctrl-names = "sleep",
 				"auxpcm-active",
-				"mi2s-active",
+				"pri_mi2s-active",
+				"tert_mi2s-active",
+				"quat_mi2s-active",
 				"active";
 		pinctrl-0 = <&pri_mi2s_sleep>, <&pri_mi2s_sd0_sleep>,
-				<&sec_aux_pcm_sleep>, <&sec_aux_pcm_din_sleep>;
+				<&sec_aux_pcm_sleep>, <&sec_aux_pcm_din_sleep>,
+				<&tert_mi2s_sleep>, <&tert_mi2s_mclk_sleep>,
+				<&tert_mi2s_sd0_sleep>,<&tert_mi2s_sd1_sleep>,
+				<&quat_mi2s_sleep>, <&quat_mi2s_mclk_sleep>,
+				<&quat_mi2s_sd0_sleep>,<&quat_mi2s_sd1_sleep>;
 		pinctrl-1 = <&pri_mi2s_sleep>, <&pri_mi2s_sd0_sleep>,
+				<&tert_mi2s_sleep>, <&tert_mi2s_mclk_sleep>,
+				<&tert_mi2s_sd0_sleep>,<&tert_mi2s_sd1_sleep>,
+				<&quat_mi2s_sleep>, <&quat_mi2s_mclk_sleep>,
+				<&quat_mi2s_sd0_sleep>,<&quat_mi2s_sd1_sleep>,
 				<&sec_aux_pcm_active>, <&sec_aux_pcm_din_active>;
 		pinctrl-2 = <&pri_mi2s_active>, <&pri_mi2s_sd0_active>,
+				<&tert_mi2s_sleep>, <&tert_mi2s_mclk_sleep>,
+				<&tert_mi2s_sd0_sleep>,<&tert_mi2s_sd1_sleep>,
+				<&quat_mi2s_sleep>, <&quat_mi2s_mclk_sleep>,
+				<&quat_mi2s_sd0_sleep>,<&quat_mi2s_sd1_sleep>,
 				<&sec_aux_pcm_sleep>, <&sec_aux_pcm_din_sleep>;
-		pinctrl-3 = <&pri_mi2s_active>, <&pri_mi2s_sd0_active>,
-				<&sec_aux_pcm_active>, <&sec_aux_pcm_din_active>;
+		pinctrl-3 = <&pri_mi2s_sleep>, <&pri_mi2s_sd0_sleep>,
+				<&tert_mi2s_active>, <&tert_mi2s_mclk_active>,
+				<&tert_mi2s_sd0_active>,<&tert_mi2s_sd1_active>,
+				<&quat_mi2s_sleep>, <&quat_mi2s_mclk_sleep>,
+				<&quat_mi2s_sd0_sleep>,<&quat_mi2s_sd1_sleep>,
+				<&sec_aux_pcm_sleep>, <&sec_aux_pcm_din_sleep>;
+		pinctrl-4 = <&pri_mi2s_sleep>, <&pri_mi2s_sd0_sleep>,
+				<&tert_mi2s_sleep>, <&tert_mi2s_mclk_sleep>,
+				<&tert_mi2s_sd0_sleep>,<&tert_mi2s_sd1_sleep>,
+				<&quat_mi2s_active>, <&quat_mi2s_mclk_active>,
+				<&quat_mi2s_sd0_active>,<&quat_mi2s_sd1_active>,
+				<&sec_aux_pcm_sleep>, <&sec_aux_pcm_din_sleep>;
+		pinctrl-5 = <&pri_mi2s_active>, <&pri_mi2s_sd0_active>,
+				<&sec_aux_pcm_active>, <&sec_aux_pcm_din_active>,
+				<&tert_mi2s_active>, <&tert_mi2s_mclk_active>,
+				<&tert_mi2s_sd0_active>,<&tert_mi2s_sd1_active>,
+				<&quat_mi2s_active>, <&quat_mi2s_mclk_active>,
+				<&quat_mi2s_sd0_active>,<&quat_mi2s_sd1_active>;
 		asoc-platform = <&pcm0>, <&pcm1>, <&pcm2>, <&voip>, <&voice>,
 				<&loopback>, <&compress>, <&hostless>,
 				<&afe>, <&lsm>, <&routing>, <&cpe>, <&compr>;
@@ -2867,6 +2897,18 @@
 			qcom,msm-dai-q6-mi2s-dev-id = <0>;
 			qcom,msm-mi2s-rx-lines = <2>;
 			qcom,msm-mi2s-tx-lines = <1>;
+		};
+                qcom,msm-dai-q6-mi2s-tert {
+			compatible = "qcom,msm-dai-q6-mi2s";
+			qcom,msm-dai-q6-mi2s-dev-id = <2>;
+			qcom,msm-mi2s-rx-lines = <1>; /* SD0 (1 << 0) */
+			qcom,msm-mi2s-tx-lines = <2>; /* SD1 (1 << 1) */
+		};
+                qcom,msm-dai-q6-mi2s-quat {
+			compatible = "qcom,msm-dai-q6-mi2s";
+			qcom,msm-dai-q6-mi2s-dev-id = <3>;
+			qcom,msm-mi2s-rx-lines = <1>; /* SD0 (1 << 0) */
+			qcom,msm-mi2s-tx-lines = <2>; /* SD1 (1 << 1) */
 		};
 	};
 
