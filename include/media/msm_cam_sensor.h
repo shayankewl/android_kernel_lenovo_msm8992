@@ -259,6 +259,10 @@ enum eeprom_cfg_type_t {
 
 struct eeprom_get_t {
 	uint32_t num_bytes;
+/*+begin chensheng1 add for eeprom checksum */
+	uint8_t is_3a_checksumed;
+	uint8_t is_pdaf_checksumed;
+/*+end chensheng1 add for eeprom checksum */
 };
 
 struct eeprom_read_t {

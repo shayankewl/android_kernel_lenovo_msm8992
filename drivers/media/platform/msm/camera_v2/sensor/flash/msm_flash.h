@@ -22,6 +22,10 @@
 #include "msm_camera_i2c.h"
 #include "msm_sd.h"
 
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08*/
+#define FEATURE_LENOVO_LED_TEST_MODE
+/*+End xujt1 add debug port for led flash driver 2015-04-08*/
+
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 
@@ -42,6 +46,14 @@ struct msm_flash_func_t {
 		struct msm_flash_cfg_data_t *);
 	int32_t (*camera_flash_high)(struct msm_flash_ctrl_t *,
 		struct msm_flash_cfg_data_t *);
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08*/
+#ifdef FEATURE_LENOVO_LED_TEST_MODE
+	int32_t (*camera_flash_low_1)(struct msm_flash_ctrl_t *,
+		struct msm_flash_cfg_data_t *);
+	int32_t (*camera_flash_low_2)(struct msm_flash_ctrl_t *,
+		struct msm_flash_cfg_data_t *);
+#endif
+/*+End xujt1 add debug port for led flash driver 2015-04-08*/
 };
 
 struct msm_flash_table {

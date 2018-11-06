@@ -228,7 +228,7 @@ static int msm_cpp_update_bandwidth(struct cpp_device *cpp_dev,
 
 	int rc;
 	struct msm_bus_paths *path;
-	cpp_dev->bus_idx = 3 - cpp_dev->bus_idx;
+
 	path = &(msm_cpp_bus_scale_data.usecase[cpp_dev->bus_idx]);
 	path->vectors[0].ab = ab;
 	path->vectors[0].ib = ib;
@@ -239,6 +239,7 @@ static int msm_cpp_update_bandwidth(struct cpp_device *cpp_dev,
 		pr_err("Fail bus scale update %d\n", rc);
 		return -EINVAL;
 	}
+	cpp_dev->bus_idx = 3 - cpp_dev->bus_idx;
 
 	return 0;
 }
@@ -695,6 +696,7 @@ static int cpp_init_mem(struct cpp_device *cpp_dev)
 	int rc = 0;
 
 	kref_init(&cpp_dev->refcount);
+	kref_get(&cpp_dev->refcount);
 	cpp_dev->client = msm_ion_client_create("cpp");
 
 	CPP_DBG("E\n");
@@ -2701,7 +2703,7 @@ STREAM_BUFF_END:
 			&buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_err_ratelimited("error getting buffer rc:%d\n", rc);
+			pr_err("error getting buffer rc:%d\n", rc);
 			break;
 		}
 		buff_mgr_info.frame_id = frame_info.frame_id;

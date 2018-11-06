@@ -456,7 +456,7 @@ static void msm_vfe46_process_reg_update(struct vfe_device *vfe_dev,
 				(uint32_t)BIT(i));
 			switch (i) {
 			case VFE_PIX_0:
-				for (j = 0; j < VFE_AXI_SRC_MAX; j++) {
+				for (j = 0; j < MAX_NUM_STREAM; j++) {
 					stream_info =
 						&vfe_dev->axi_data.
 							stream_info[j];
@@ -563,13 +563,14 @@ static void msm_vfe46_reg_update(struct vfe_device *vfe_dev,
 		vfe_dev->reg_update_requested;
 	if ((vfe_dev->is_split && vfe_dev->pdev->id == ISP_VFE1) &&
 		((frame_src == VFE_PIX_0) || (frame_src == VFE_SRC_MAX))) {
-		msm_camera_io_w_mb(update_mask,
+		msm_camera_io_w_mb(
+			vfe_dev->dual_vfe_res->reg_update_mask[ISP_VFE0],
 			vfe_dev->dual_vfe_res->vfe_base[ISP_VFE0] + 0x3D8);
-		msm_camera_io_w_mb(update_mask,
+		msm_camera_io_w_mb(vfe_dev->reg_update_requested,
 			vfe_dev->vfe_base + 0x3D8);
 	} else if (!vfe_dev->is_split ||
 		(frame_src >= VFE_RAW_0 && frame_src <= VFE_SRC_MAX)) {
-		msm_camera_io_w_mb(update_mask,
+		msm_camera_io_w_mb(vfe_dev->reg_update_requested,
 			vfe_dev->vfe_base + 0x3D8);
 	}
 	spin_unlock_irqrestore(&vfe_dev->reg_update_lock, flags);
@@ -628,18 +629,18 @@ static void msm_vfe46_axi_update_cgc_override(struct vfe_device *vfe_dev,
 	msm_camera_io_w_mb(val, vfe_dev->vfe_base + 0x3C);
 }
 
-static void msm_vfe46_axi_enable_wm(void __iomem *vfe_base,
+static void msm_vfe46_axi_enable_wm(struct vfe_device *vfe_dev,
 	uint8_t wm_idx, uint8_t enable)
 {
 	uint32_t val;
 
-	val = msm_camera_io_r(vfe_base + VFE46_WM_BASE(wm_idx));
+	val = msm_camera_io_r(vfe_dev->vfe_base + VFE46_WM_BASE(wm_idx));
 	if (enable)
 		val |= 0x1;
 	else
 		val &= ~0x1;
 	msm_camera_io_w_mb(val,
-		vfe_base + VFE46_WM_BASE(wm_idx));
+		vfe_dev->vfe_base + VFE46_WM_BASE(wm_idx));
 }
 
 static void msm_vfe46_axi_cfg_comp_mask(struct vfe_device *vfe_dev,

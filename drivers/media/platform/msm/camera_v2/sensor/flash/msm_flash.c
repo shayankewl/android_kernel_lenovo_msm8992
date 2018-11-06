@@ -18,14 +18,151 @@
 #include "msm_flash.h"
 #include "msm_camera_dt_util.h"
 #include "msm_cci.h"
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08*/
+#ifdef FEATURE_LENOVO_LED_TEST_MODE
+#include <linux/proc_fs.h>
+#endif
+/*+End xujt1 add debug port for led flash driver 2015-04-08*/
 
 #undef CDBG
-#define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 DEFINE_MSM_MUTEX(msm_flash_mutex);
 
 static struct v4l2_file_operations msm_flash_v4l2_subdev_fops;
 static struct led_trigger *torch_trigger;
+
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08; 2015-05-13 update*/
+#ifdef FEATURE_LENOVO_LED_TEST_MODE
+static struct msm_flash_ctrl_t *fctrl_backup = NULL;
+
+ssize_t  proc_flash_led_write (struct file *file, const char __user *buf, size_t nbytes, loff_t *ppos)
+{
+    char string[nbytes];
+#if 0
+    int rc = 0;
+    struct msm_flash_cfg_data_t   flash_data;
+    struct msm_flash_init_info_t  flash_init_info;
+    memset(&flash_init_info, 0, sizeof(struct msm_flash_init_info_t));
+    memset(&flash_data, 0, sizeof(struct msm_flash_cfg_data_t)); 
+
+    flash_init_info.flash_driver_type = FLASH_DRIVER_DEFAULT;
+    flash_data.flash_current[0] = 120;
+    flash_data.flash_current[1] = 120;	
+    flash_data.cfg.flash_init_info = &flash_init_info;
+#endif
+    CDBG("proc_flash_led_write called\n");
+
+    sscanf(buf, "%s", string);
+
+#if 1
+    if (!strcmp((const char *)string, (const char *)"led1_on"))
+    {
+		if (fctrl_backup->torch_trigger[0]){
+			led_trigger_event(fctrl_backup->torch_trigger[0], 120);
+		}else{
+			pr_err("No led1 torch trigger found, can't set brightness\n");
+		}
+    }else if (!strcmp((const char *)string, (const char *)"led2_on")){
+		if (fctrl_backup->torch_trigger[1]){
+			led_trigger_event(fctrl_backup->torch_trigger[1], 120);
+		}else{
+			pr_err("No led2 torch trigger found, can't set brightness\n");
+		}
+    }else if (!strcmp((const char *)string, (const char *)"all_on")){
+         int32_t i = 0;
+	for (i = 0; i < fctrl_backup->torch_num_sources; i++){
+		if (fctrl_backup->torch_trigger[i]){
+			led_trigger_event(fctrl_backup->torch_trigger[i], 120);
+		}
+	}
+    }else if (!strcmp((const char *)string, (const char *)"off")){
+         int32_t i = 0;
+	for (i = 0; i < fctrl_backup->torch_num_sources; i++){
+		if (fctrl_backup->torch_trigger[i]){
+			led_trigger_event(fctrl_backup->torch_trigger[i], 0);
+		}
+	}
+    }
+#else
+    //add protection for null pointer, this test call must after flash init
+    if(!fctrl_backup->func_tbl)
+    {
+        pr_err("flash doesn't init, denied flash led test call\n");
+    }
+
+    if (!strcmp((const char *)string, (const char *)"led1_on"))
+    {
+    	   CDBG("MSM_CAMERA_LED1_LOW called\n");
+	   
+	   if (fctrl_backup->func_tbl->camera_flash_init)
+	   {
+	       rc = fctrl_backup->func_tbl->camera_flash_init(fctrl_backup,&flash_data);
+    	       if (rc < 0){
+    	           pr_err("flash_led_init failed\n");
+    	       }else{
+                    if (fctrl_backup->func_tbl->camera_flash_low_1){
+    	               rc = fctrl_backup->func_tbl->camera_flash_low_1(fctrl_backup,&flash_data);
+                    }
+    	       }
+    	    }else{
+    		pr_err("no flash_led_init func on\n");
+    	    }
+    }else if (!strcmp((const char *)string, (const char *)"led2_on")){
+    	   CDBG("MSM_CAMERA_LED2_LOW called\n");
+	   
+	   if (fctrl_backup->func_tbl->camera_flash_init)
+	   {
+	       rc = fctrl_backup->func_tbl->camera_flash_init(fctrl_backup,&flash_data);
+    	       if (rc < 0){
+    	           pr_err("flash_led_init failed\n");
+    	       }else{
+                    if (fctrl_backup->func_tbl->camera_flash_low_2){
+    	               rc = fctrl_backup->func_tbl->camera_flash_low_2(fctrl_backup,&flash_data);
+                    }
+    	       }
+    	    }else{
+    		pr_err("no flash_led_init func on\n");
+    	    }
+    }else if (!strcmp((const char *)string, (const char *)"all_on")){
+    	   CDBG("MSM_CAMERA_LED_ALL_LOW called\n");
+	   
+	   if (fctrl_backup->func_tbl->camera_flash_init)
+	   {
+	       rc = fctrl_backup->func_tbl->camera_flash_init(fctrl_backup,&flash_data);
+    	       if (rc < 0){
+    	           pr_err("flash_led_init failed\n");
+    	       }else{
+                    if (fctrl_backup->func_tbl->camera_flash_low){
+    	               rc = fctrl_backup->func_tbl->camera_flash_low(fctrl_backup,&flash_data);
+                    }
+    	       }
+    	    }else{
+    		pr_err("no flash_led_init func on\n");
+    	    }
+    }else if (!strcmp((const char *)string, (const char *)"off")){
+        	CDBG("MSM_CAMERA_LED_OFF called\n");
+	if (fctrl_backup->func_tbl->camera_flash_off)
+	{
+		rc = fctrl_backup->func_tbl->camera_flash_off(fctrl_backup,&flash_data);
+		if (rc < 0){
+			pr_err("flash_led_init failed\n");
+		}
+	}else{
+	    pr_err("no flash_led_release func off\n");
+	}
+    }
+#endif
+
+    return nbytes;
+}
+
+const struct file_operations proc_flash_led_operations = {
+	.owner	= THIS_MODULE,
+	.write	= proc_flash_led_write,
+};
+#endif
+/*+End xujt1 add debug port for led flash driver 2015-04-08; 2015-05-13 update*/
 
 static const struct of_device_id msm_flash_dt_match[] = {
 	{.compatible = "qcom,camera-flash", .data = NULL},
@@ -54,42 +191,117 @@ static struct msm_camera_i2c_fn_t msm_sensor_cci_func_tbl = {
 	.i2c_poll =  msm_camera_cci_i2c_poll,
 };
 
-void msm_torch_brightness_set(struct led_classdev *led_cdev,
-				enum led_brightness value)
+/*+Begin: chenzc2. 2015-09-18. Add for the torch app requirement and for the internal testing of current for led.*/
+/*Comment: The value should be 1 or 0. */
+/* X3 Flash Position Show:   **L : H**   */
+#define TORCH_LED1_CURRENT_VALUE  95 /* The current of high color temp led.*/
+#define TORCH_LED2_CURRENT_VALUE  40 /* The current of low color temp led.*/
+void msm_torch_brightness_set_torch(struct led_classdev *led_cdev, enum led_brightness value)
 {
-	if (!torch_trigger) {
-		pr_err("No torch trigger found, can't set brightness\n");
-		return;
-	}
+    if (NULL == fctrl_backup->torch_trigger[0]) {
+        pr_err("No torch trigger led1 found, can't set brightness\n");
+        return;
+    }
 
+    if (NULL == fctrl_backup->torch_trigger[1]) {
+        pr_err("No torch trigger led2 found, can't set brightness\n");
+        return;
+    }
+    CDBG("%s:%d set vaule %d for torch!", __func__, __LINE__,value);
+
+    if (value){
+        led_trigger_event(fctrl_backup->torch_trigger[0], TORCH_LED1_CURRENT_VALUE);
+        led_trigger_event(fctrl_backup->torch_trigger[1], TORCH_LED2_CURRENT_VALUE);  
+    }else{
+        led_trigger_event(fctrl_backup->torch_trigger[0], 0);
+        led_trigger_event(fctrl_backup->torch_trigger[1], 0);
+    }
+};
+
+void msm_torch_brightness_set_led0(struct led_classdev *led_cdev, enum led_brightness value)
+{
+    if (NULL == fctrl_backup->torch_trigger[0]) {
+        pr_err("No torch trigger 0 found, can't set brightness\n");
+        return;
+    }
+
+    if (0 <= value && value <= 200){
+        led_trigger_event(fctrl_backup->torch_trigger[0], value);
+    }
+};
+
+void msm_torch_brightness_set_led1(struct led_classdev *led_cdev, enum led_brightness value)
+{
+    if (NULL == fctrl_backup->torch_trigger[1]) {
+        pr_err("No torch trigger 1 found, can't set brightness\n");
+        return;
+    }
+    
+    if (0 <= value && value <= 200){
+        led_trigger_event(fctrl_backup->torch_trigger[1], value);
+    }
+};
+
+/*Comment: This function uses in the msm_torch_create_classdev for init the defaul value when probe.*/
+void msm_torch_brightness_init_led(struct led_trigger *torch_trigger, enum led_brightness value)
+{
+    if (!torch_trigger) {
+        pr_err("No torch trigger found, can't set brightness\n");
+        return;
+    }
+    
+    led_trigger_event(torch_trigger, value);
+};
+
+/*Comment: Use in msm_torch_create_classdev for creating the torch-light in app.*/
+static struct led_classdev msm_torch_light_app = {
+	.name		     = "torch-light", //use as sys/class/leds/torch-light node 
+	.brightness_set  = msm_torch_brightness_set_torch,
+	.brightness          = LED_OFF,
+};
+
+static int32_t msm_torch_create_app_classdev(struct platform_device *pdev)
+{
+    int32_t rc = 0;
+    
+    rc = led_classdev_register(&pdev->dev, &msm_torch_light_app);
+    if (rc) {
+           pr_err("Failed to register torch-light for app classdev. rc = %d\n", rc);
+           return rc;
+    }
+    
+    return 0;
+};
+/*+End.*/
+
+void msm_torch_brightness_set(struct led_classdev *led_cdev, enum led_brightness value)
+{
+    if (!torch_trigger) {
+        pr_err("No torch trigger found, can't set brightness\n");
+        return;
+    }
+    
 	led_trigger_event(torch_trigger, value);
 };
 
 static struct led_classdev msm_torch_led[MAX_LED_TRIGGERS] = {
 	{
-		.name		= "torch-light0",
-		.brightness_set	= msm_torch_brightness_set,
+		.name		= "torch-light0", //use as sys/class/leds/torch-light node 
+		.brightness_set	= msm_torch_brightness_set_led0,
 		.brightness	= LED_OFF,
 	},
 	{
 		.name		= "torch-light1",
-		.brightness_set	= msm_torch_brightness_set,
-		.brightness	= LED_OFF,
-	},
-	{
-		.name		= "torch-light2",
-		.brightness_set	= msm_torch_brightness_set,
+		.brightness_set	= msm_torch_brightness_set_led1,
 		.brightness	= LED_OFF,
 	},
 };
 
-static int32_t msm_torch_create_classdev(struct platform_device *pdev,
-				void *data)
+static int32_t msm_torch_create_classdev(struct platform_device *pdev, void *data)
 {
 	int32_t rc = 0;
 	int32_t i = 0;
-	struct msm_flash_ctrl_t *fctrl =
-		(struct msm_flash_ctrl_t *)data;
+	struct msm_flash_ctrl_t *fctrl = (struct msm_flash_ctrl_t *)data;
 
 	if (!fctrl) {
 		pr_err("Invalid fctrl\n");
@@ -98,17 +310,12 @@ static int32_t msm_torch_create_classdev(struct platform_device *pdev,
 
 	for (i = 0; i < fctrl->torch_num_sources; i++) {
 		if (fctrl->torch_trigger[i]) {
-			torch_trigger = fctrl->torch_trigger[i];
-			CDBG("%s:%d msm_torch_brightness_set for torch %d",
-				__func__, __LINE__, i);
-			msm_torch_brightness_set(&msm_torch_led[i],
-				LED_OFF);
-
-			rc = led_classdev_register(&pdev->dev,
-				&msm_torch_led[i]);
+			CDBG("%s:%d SET value %d for torch", __func__, __LINE__, i);
+			msm_torch_brightness_init_led(fctrl->torch_trigger[i], LED_OFF);
+            
+			rc = led_classdev_register(&pdev->dev, &msm_torch_led[i]);
 			if (rc) {
-				pr_err("Failed to register %d led dev. rc = %d\n",
-						i, rc);
+				pr_err("Failed to register %d led dev. rc = %d\n", i, rc);
 				return rc;
 			}
 		} else {
@@ -447,8 +654,10 @@ static int32_t msm_flash_init(
 		flash_ctrl->flash_driver_type) {
 		flash_driver_type = flash_ctrl->flash_driver_type;
 		for (i = 0; i < MAX_LED_TRIGGERS; i++) {
-			flash_ctrl->flash_max_current[i] =
-				flash_data->flash_current[i];
+/*+Begin huangsh4 correct  max_current with flash_data  2015-07-22*/
+			flash_data->flash_current[i] =
+				flash_ctrl->flash_max_current[i];
+/*+end huangsh4 correct  max_current with flash_data 2015-07-22*/
 			flash_data->flash_duration[i] =
 				flash_ctrl->flash_max_duration[i];
 		}
@@ -486,6 +695,43 @@ static int32_t msm_flash_init(
 	return 0;
 }
 
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08*/
+#ifdef FEATURE_LENOVO_LED_TEST_MODE
+static int32_t msm_flash_low_1(
+	struct msm_flash_ctrl_t *flash_ctrl,
+	struct msm_flash_cfg_data_t *flash_data)
+{
+	/* Turn on flash triggers */
+	CDBG("Enter\n");
+	CDBG("msm_flash_low_1[%d] = %d", 0, 120);
+	if (!flash_ctrl->torch_trigger[0]) {
+		pr_err("No torch trigger found, can't set brightness\n");
+		return 0;
+	}
+	led_trigger_event(flash_ctrl->torch_trigger[0],120);
+	CDBG("Exit\n");
+	return 0;
+}
+
+static int32_t msm_flash_low_2(
+	struct msm_flash_ctrl_t *flash_ctrl,
+	struct msm_flash_cfg_data_t *flash_data)
+{
+	/* Turn on flash triggers */
+	CDBG("Enter\n");
+	CDBG("msm_flash_low_2[%d] = %d", 1, 120);
+	if (!flash_ctrl->torch_trigger[1]) {
+		pr_err("No torch trigger found, can't set brightness\n");
+		return 0;
+	}
+	led_trigger_event(flash_ctrl->torch_trigger[1],120);
+	CDBG("Exit\n");
+	return 0;
+}
+
+#endif
+/*+End xujt1 add debug port for led flash driver 2015-04-08*/
+
 static int32_t msm_flash_low(
 	struct msm_flash_ctrl_t *flash_ctrl,
 	struct msm_flash_cfg_data_t *flash_data)
@@ -504,7 +750,7 @@ static int32_t msm_flash_low(
 		if (flash_ctrl->torch_trigger[i]) {
 			max_current = flash_ctrl->torch_max_current[i];
 			if (flash_data->flash_current[i] >= 0 &&
-				flash_data->flash_current[i] <
+				flash_data->flash_current[i] <=
 				max_current) {
 				curr = flash_data->flash_current[i];
 			} else {
@@ -540,7 +786,7 @@ static int32_t msm_flash_high(
 		if (flash_ctrl->flash_trigger[i]) {
 			max_current = flash_ctrl->flash_max_current[i];
 			if (flash_data->flash_current[i] >= 0 &&
-				flash_data->flash_current[i] <
+				flash_data->flash_current[i] <=
 				max_current) {
 				curr = flash_data->flash_current[i];
 			} else {
@@ -1100,6 +1346,19 @@ static int32_t msm_flash_platform_probe(struct platform_device *pdev)
 	if (flash_ctrl->flash_driver_type == FLASH_DRIVER_PMIC)
 		rc = msm_torch_create_classdev(pdev, flash_ctrl);
 
+/*+Begin: chenzc2. 2015-06-05. Init the classdev for the torch app.*/
+         rc = msm_torch_create_app_classdev(pdev);
+/*+End.*/
+
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08*/
+#ifdef FEATURE_LENOVO_LED_TEST_MODE
+         fctrl_backup = flash_ctrl;
+         if(proc_create_data("CTP_FLASH_CTRL", S_IFREG | S_IWUGO | S_IWUSR, NULL, &proc_flash_led_operations, NULL) == NULL){
+		CDBG("proc_create_data CTP_FLASH_CTRL fail\n");
+	}
+#endif
+/*+End xujt1 add debug port for led flash driver 2015-04-08*/
+
 	CDBG("probe success\n");
 	return rc;
 }
@@ -1140,6 +1399,12 @@ static struct msm_flash_table msm_pmic_flash_table = {
 		.camera_flash_off = msm_flash_off,
 		.camera_flash_low = msm_flash_low,
 		.camera_flash_high = msm_flash_high,
+/*+Begin xujt1 add debug port for led flash driver 2015-04-08*/		
+#ifdef FEATURE_LENOVO_LED_TEST_MODE
+		.camera_flash_low_1 = msm_flash_low_1,
+		.camera_flash_low_2 = msm_flash_low_2,
+#endif
+/*+End xujt1 add debug port for led flash driver 2015-04-08*/
 	},
 };
 

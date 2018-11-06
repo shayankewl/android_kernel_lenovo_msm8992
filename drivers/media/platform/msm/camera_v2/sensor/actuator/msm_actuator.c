@@ -26,6 +26,9 @@ DEFINE_MSM_MUTEX(msm_actuator_mutex);
 #define PARK_LENS_MID_STEP 5
 #define PARK_LENS_SMALL_STEP 3
 #define MAX_QVALUE 4096
+/*begin+ chensheng1 add for lc898212axb 2015/04/22 */
+#define CONFIG_ONSEMI_LC898212AXB
+/*end+ chensheng1 add for lc898212axb 2015/04/22 */
 
 static struct v4l2_file_operations msm_actuator_v4l2_subdev_fops;
 static int32_t msm_actuator_power_up(struct msm_actuator_ctrl_t *a_ctrl);
@@ -252,6 +255,35 @@ static int msm_actuator_bivcm_handle_i2c_ops(
 					write_arr[i].addr_type);
 				break;
 			}
+/*begin+ chensheng1 add for lc898212axb 2015/04/22 */
+#ifdef CONFIG_ONSEMI_LC898212AXB
+			j = 0;
+			do {
+				rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+					&a_ctrl->i2c_client,
+					write_arr[i - 1].reg_addr,
+					&reg_data,
+					write_arr[i - 1].data_type);
+				CDBG("%s: 0x8A: 0x%x", __func__, reg_data);
+				j = j + 1;
+			} while((reg_data & 0x01) && (j < ACTUATOR_MAX_POLL_COUNT));
+			if(reg_data & 0x08) {
+				for (j = 0; j < ACTUATOR_MAX_POLL_COUNT; j++) {
+					rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+						&a_ctrl->i2c_client,
+						write_arr[i].reg_addr,
+						&reg_data,
+						write_arr[i].data_type);
+					if (reg_data & write_arr[i].reg_data) {
+						CDBG("%s: %d reg_data 0x%x\n", __func__, j, reg_data);
+						//msleep(1);
+						continue;
+					}
+					else
+						break;
+				}
+			}
+#else
 			for (j = 0; j < ACTUATOR_MAX_POLL_COUNT; j++) {
 				rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_poll(
 					&a_ctrl->i2c_client,
@@ -266,6 +298,8 @@ static int msm_actuator_bivcm_handle_i2c_ops(
 				}
 				break;
 			}
+#endif
+/*end+ chensheng1 add for lc898212axb 2015/04/22 */
 			if (j == ACTUATOR_MAX_POLL_COUNT)
 				CDBG("%s:%d Poll register not as expected\n",
 				__func__, __LINE__);
@@ -346,6 +380,9 @@ static int32_t msm_actuator_init_focus(struct msm_actuator_ctrl_t *a_ctrl,
 {
 	int32_t rc = -EFAULT;
 	int32_t i = 0;
+/*begin+ chensheng1 add for lc898212axb 2015/04/22 */
+	int32_t j = 0;
+/*end+ chensheng1 add for lc898212axb 2015/04/22 */
 	enum msm_camera_i2c_reg_addr_type save_addr_type;
 	CDBG("Enter\n");
 
@@ -374,11 +411,36 @@ static int32_t msm_actuator_init_focus(struct msm_actuator_ctrl_t *a_ctrl,
 				settings[i].data_type);
 			break;
 		case MSM_ACT_POLL:
+/*begin+ chensheng1 add for lc898212axb 2015/04/22 */
+#ifdef CONFIG_ONSEMI_LC898212AXB
+			for (j = 0; j < ACTUATOR_MAX_POLL_COUNT; j++) {
+				rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_poll(
+					&a_ctrl->i2c_client,
+					settings[i].reg_addr,
+					settings[i].reg_data,
+					settings[i].data_type);
+				if (rc == 1) {
+					if (0 != settings[i].delay)
+						msleep(settings[i].delay);
+					continue;
+				}
+				if (rc < 0) {
+					pr_err("%s: i2c poll error:%d\n", __func__, rc);
+					return rc;
+				}
+				break;
+			}
+			if (j == ACTUATOR_MAX_POLL_COUNT)
+				CDBG("%s:%d Poll register not as expected\n",
+				__func__, __LINE__);
+#else
 			rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_poll(
 				&a_ctrl->i2c_client,
 				settings[i].reg_addr,
 				settings[i].reg_data,
 				settings[i].data_type);
+#endif
+/*end+ chensheng1 add for lc898212axb 2015/04/22 */
 			break;
 		default:
 			pr_err("Unsupport i2c_operation: %d\n",

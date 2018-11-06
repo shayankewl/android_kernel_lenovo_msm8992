@@ -718,6 +718,7 @@ int camera_init_v4l2(struct device *dev, unsigned int *session)
 	struct msm_video_device *pvdev;
 	struct v4l2_device *v4l2_dev;
 	int rc = 0;
+    pr_err("%s:wk_log:E\n",__func__);
 
 	pvdev = kzalloc(sizeof(struct msm_video_device),
 		GFP_KERNEL);
@@ -787,6 +788,7 @@ int camera_init_v4l2(struct device *dev, unsigned int *session)
 	atomic_set(&pvdev->opened, 0);
 	video_set_drvdata(pvdev->vdev, pvdev);
 	device_init_wakeup(&pvdev->vdev->dev, 1);
+    pr_err("%s:wk_log:X\n",__func__);
 	goto init_end;
 
 video_register_fail:

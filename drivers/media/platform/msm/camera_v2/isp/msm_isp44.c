@@ -522,7 +522,7 @@ static void msm_vfe44_process_reg_update(struct vfe_device *vfe_dev,
 				(uint32_t)BIT(i));
 			switch (i) {
 			case VFE_PIX_0:
-				for (j = 0; j < VFE_AXI_SRC_MAX; j++) {
+				for (j = 0; j < MAX_NUM_STREAM; j++) {
 					stream_info =
 						&vfe_dev->axi_data.
 							stream_info[j];
@@ -630,13 +630,14 @@ static void msm_vfe44_reg_update(struct vfe_device *vfe_dev,
 		vfe_dev->reg_update_requested;
 	if ((vfe_dev->is_split && vfe_dev->pdev->id == ISP_VFE1) &&
 		((frame_src == VFE_PIX_0) || (frame_src == VFE_SRC_MAX))) {
-		msm_camera_io_w_mb(update_mask,
+		msm_camera_io_w_mb(
+			vfe_dev->dual_vfe_res->reg_update_mask[ISP_VFE0],
 			vfe_dev->dual_vfe_res->vfe_base[ISP_VFE0] + 0x378);
-		msm_camera_io_w_mb(update_mask,
+		msm_camera_io_w_mb(vfe_dev->reg_update_requested,
 			vfe_dev->vfe_base + 0x378);
 	} else if (!vfe_dev->is_split ||
 		(frame_src >= VFE_RAW_0 && frame_src <= VFE_SRC_MAX)) {
-		msm_camera_io_w_mb(update_mask,
+		msm_camera_io_w_mb(vfe_dev->reg_update_requested,
 			vfe_dev->vfe_base + 0x378);
 	}
 	spin_unlock_irqrestore(&vfe_dev->reg_update_lock, flags);
@@ -681,17 +682,17 @@ static void msm_vfe44_axi_reload_wm(struct vfe_device *vfe_dev,
 	msm_camera_io_w_mb(reload_mask, vfe_base + 0x4C);
 }
 
-static void msm_vfe44_axi_enable_wm(void __iomem *vfe_base,
+static void msm_vfe44_axi_enable_wm(struct vfe_device *vfe_dev,
 	uint8_t wm_idx, uint8_t enable)
 {
 	uint32_t val;
-	val = msm_camera_io_r(vfe_base + VFE44_WM_BASE(wm_idx));
+	val = msm_camera_io_r(vfe_dev->vfe_base + VFE44_WM_BASE(wm_idx));
 	if (enable)
 		val |= 0x1;
 	else
 		val &= ~0x1;
 	msm_camera_io_w_mb(val,
-		vfe_base + VFE44_WM_BASE(wm_idx));
+		vfe_dev->vfe_base + VFE44_WM_BASE(wm_idx));
 }
 
 static void msm_vfe44_axi_update_cgc_override(struct vfe_device *vfe_dev,
@@ -1030,17 +1031,33 @@ static void msm_vfe44_cfg_camif(struct vfe_device *vfe_dev,
 	msm_camera_io_w(pix_cfg->input_mux << 16 | pix_cfg->pixel_pattern,
 		vfe_dev->vfe_base + 0x1C);
 
-	if (subsample_cfg->pixel_skip || subsample_cfg->line_skip) {
-		bus_sub_en = 1;
-		val = msm_camera_io_r(vfe_dev->vfe_base + 0x2F8);
-		val &= 0xFFFFFFDF;
-		val = val | bus_sub_en << 5;
-		msm_camera_io_w(val, vfe_dev->vfe_base + 0x2F8);
-		subsample_cfg->pixel_skip &= 0x0000FFFF;
-		subsample_cfg->line_skip  &= 0x0000FFFF;
-		msm_camera_io_w((subsample_cfg->line_skip << 16) |
-			subsample_cfg->pixel_skip,
-			vfe_dev->vfe_base + 0x30C);
+	switch (pix_cfg->input_mux) {
+	case CAMIF:
+		val = 0x01;
+		msm_camera_io_w(val, vfe_dev->vfe_base + 0x2F4);
+		if (subsample_cfg->pixel_skip || subsample_cfg->line_skip) {
+			bus_sub_en = 1;
+			val = msm_camera_io_r(vfe_dev->vfe_base + 0x2F8);
+			val &= 0xFFFFFFDF;
+			val = val | bus_sub_en << 5;
+			msm_camera_io_w(val, vfe_dev->vfe_base + 0x2F8);
+			subsample_cfg->pixel_skip &= 0x0000FFFF;
+			subsample_cfg->line_skip  &= 0x0000FFFF;
+			msm_camera_io_w((subsample_cfg->line_skip << 16) |
+				subsample_cfg->pixel_skip,
+				vfe_dev->vfe_base + 0x30C);
+		}
+		break;
+	case TESTGEN:
+		val = 0x01;
+		msm_camera_io_w(val, vfe_dev->vfe_base + 0x93C);
+		break;
+	case EXTERNAL_READ:
+		return;
+	default:
+		pr_err("%s: not supported input_mux %d\n",
+			__func__, pix_cfg->input_mux);
+		break;
 	}
 
 	first_pixel = camif_cfg->first_pixel;
