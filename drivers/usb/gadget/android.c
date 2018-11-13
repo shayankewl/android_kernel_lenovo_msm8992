@@ -522,7 +522,7 @@ static void android_work(struct work_struct *data)
 		if(uevent_envp == disconnected && cdrom_dev != NULL)
 			fsg_store_file(cdrom_dev,NULL,NULL,0);
 	} else {
-		pr_info("%s: did not send uevent (%d %d %p)\n", __func__,
+		pr_info("%s: did not send uevent (%d %d %pK)\n", __func__,
 			 dev->connected, dev->sw_connected, cdev->config);
 	}
 }

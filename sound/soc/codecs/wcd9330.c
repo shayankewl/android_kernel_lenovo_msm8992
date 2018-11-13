@@ -51,7 +51,8 @@ enum {
 	ADC4_TXFE,
 	ADC5_TXFE,
 	ADC6_TXFE,
-	HPH_DELAY,
+	HPH_DELAY_L,
+	HPH_DELAY_R,
 };
 
 #define TOMTOM_MAD_SLIMBUS_TX_PORT 12
@@ -356,7 +357,8 @@ static struct afe_param_id_clip_bank_sel clip_bank_sel = {
 #define TOMTOM_MCLK_CLK_9P6MHZ 9600000
 
 #define TOMTOM_FORMATS_S16_S24_LE (SNDRV_PCM_FMTBIT_S16_LE | \
-			SNDRV_PCM_FORMAT_S24_LE)
+			SNDRV_PCM_FORMAT_S24_LE | \
+			SNDRV_PCM_FMTBIT_S24_3LE)
 
 #define TOMTOM_FORMATS (SNDRV_PCM_FMTBIT_S16_LE)
 
@@ -1365,6 +1367,13 @@ static int tomtom_mad_input_put(struct snd_kcontrol *kcontrol,
 
 	tomtom_mad_input = ucontrol->value.integer.value[0];
 	micb_4_int_reg = tomtom->resmgr.reg_addr->micb_4_int_rbias;
+
+	if (tomtom_mad_input >= ARRAY_SIZE(tomtom_conn_mad_text)) {
+		dev_err(codec->dev,
+			"%s: tomtom_mad_input = %d out of bounds\n",
+			__func__, tomtom_mad_input);
+		return -EINVAL;
+	}
 
 	pr_debug("%s: tomtom_mad_input = %s\n", __func__,
 			tomtom_conn_mad_text[tomtom_mad_input]);
@@ -4414,21 +4423,42 @@ static int tomtom_hph_pa_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		set_bit(HPH_DELAY, &tomtom->status_mask);
+		if (w->shift == 5)
+			set_bit(HPH_DELAY_L, &tomtom->status_mask);
+		else if (w->shift == 4)
+			set_bit(HPH_DELAY_R, &tomtom->status_mask);
+		else {
+			pr_err("%s: Invalid w->shift %d\n", __func__,
+				w->shift);
+			return -EINVAL;
+		}
 		/* Let MBHC module know PA is turning on */
 		wcd9xxx_resmgr_notifier_call(&tomtom->resmgr, e_pre_on);
 		break;
 
 	case SND_SOC_DAPM_POST_PMU:
-		if (test_bit(HPH_DELAY, &tomtom->status_mask)) {
+		if (test_bit(HPH_DELAY_L, &tomtom->status_mask)) {
 			/*
-			 * Make sure to wait 10ms after enabling HPHR_HPHL
+			 * Make sure to wait 10ms after enabling HPHL
 			 * in register 0x1AB
 			*/
 			usleep_range(pa_settle_time, pa_settle_time + 1000);
-			clear_bit(HPH_DELAY, &tomtom->status_mask);
+			clear_bit(HPH_DELAY_L, &tomtom->status_mask);
 			pr_debug("%s: sleep %d us after %s PA enable\n",
 				__func__, pa_settle_time, w->name);
+		} else if (test_bit(HPH_DELAY_R, &tomtom->status_mask)) {
+			/*
+			 * Make sure to wait 10ms after enabling HPHR
+			 * in register 0x1AB
+			*/
+			usleep_range(pa_settle_time, pa_settle_time + 1000);
+			clear_bit(HPH_DELAY_R, &tomtom->status_mask);
+			pr_debug("%s: sleep %d us after %s PA enable\n",
+				__func__, pa_settle_time, w->name);
+		} else {
+			pr_err("%s: Invalid w->shift %d\n", __func__,
+				w->shift);
+			return -EINVAL;
 		}
 		if (!high_perf_mode && !tomtom->uhqa_mode) {
 			wcd9xxx_clsh_fsm(codec, &tomtom->clsh_d,
@@ -4439,21 +4469,42 @@ static int tomtom_hph_pa_event(struct snd_soc_dapm_widget *w,
 		break;
 
 	case SND_SOC_DAPM_PRE_PMD:
-		set_bit(HPH_DELAY, &tomtom->status_mask);
+		if (w->shift == 5)
+			set_bit(HPH_DELAY_L, &tomtom->status_mask);
+		else if (w->shift == 4)
+			set_bit(HPH_DELAY_R, &tomtom->status_mask);
+		else {
+			pr_err("%s: Invalid w->shift %d\n", __func__,
+				 w->shift);
+			return -EINVAL;
+		}
 		break;
 
 	case SND_SOC_DAPM_POST_PMD:
 		/* Let MBHC module know PA turned off */
 		wcd9xxx_resmgr_notifier_call(&tomtom->resmgr, e_post_off);
-		if (test_bit(HPH_DELAY, &tomtom->status_mask)) {
+		if (test_bit(HPH_DELAY_L, &tomtom->status_mask)) {
 			/*
-			 * Make sure to wait 10ms after disabling HPHR_HPHL
+			 * Make sure to wait 10ms after disabling HPHL
 			 * in register 0x1AB
 			*/
 			usleep_range(pa_settle_time, pa_settle_time + 1000);
-			clear_bit(HPH_DELAY, &tomtom->status_mask);
+			clear_bit(HPH_DELAY_L, &tomtom->status_mask);
 			pr_debug("%s: sleep %d us after %s PA disable\n",
 				__func__, pa_settle_time, w->name);
+		} else if (test_bit(HPH_DELAY_R, &tomtom->status_mask)) {
+			/*
+			 * Make sure to wait 10ms after disabling HPHR
+			 * in register 0x1AB
+			*/
+			usleep_range(pa_settle_time, pa_settle_time + 1000);
+			clear_bit(HPH_DELAY_R, &tomtom->status_mask);
+			pr_debug("%s: sleep %d us after %s PA disable\n",
+				__func__, pa_settle_time, w->name);
+		} else {
+			pr_err("%s: Invalid w->shift %d\n", __func__,
+				 w->shift);
+			return -EINVAL;
 		}
 
 		break;
@@ -5557,7 +5608,7 @@ static int tomtom_set_channel_map(struct snd_soc_dai *dai,
 	struct tomtom_priv *tomtom = snd_soc_codec_get_drvdata(dai->codec);
 	struct wcd9xxx *core = dev_get_drvdata(dai->codec->dev->parent);
 	if (!tx_slot || !rx_slot) {
-		pr_err("%s: Invalid tx_slot=%p, rx_slot=%p\n",
+		pr_err("%s: Invalid tx_slot=%pK, rx_slot=%pK\n",
 			__func__, tx_slot, rx_slot);
 		return -EINVAL;
 	}
@@ -5593,7 +5644,7 @@ static int tomtom_get_channel_map(struct snd_soc_dai *dai,
 	case AIF2_PB:
 	case AIF3_PB:
 		if (!rx_slot || !rx_num) {
-			pr_err("%s: Invalid rx_slot %p or rx_num %p\n",
+			pr_err("%s: Invalid rx_slot %pK or rx_num %pK\n",
 				 __func__, rx_slot, rx_num);
 			return -EINVAL;
 		}
@@ -5612,7 +5663,7 @@ static int tomtom_get_channel_map(struct snd_soc_dai *dai,
 	case AIF4_VIFEED:
 	case AIF4_MAD_TX:
 		if (!tx_slot || !tx_num) {
-			pr_err("%s: Invalid tx_slot %p or tx_num %p\n",
+			pr_err("%s: Invalid tx_slot %pK or tx_num %pK\n",
 				 __func__, tx_slot, tx_num);
 			return -EINVAL;
 		}
@@ -5825,6 +5876,7 @@ static void tomtom_set_rxsb_port_format(struct snd_pcm_hw_params *params,
 		tomtom_p->dai[dai->id].bit_width = 16;
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
+	case SNDRV_PCM_FORMAT_S24_3LE:
 		bit_sel = 0x0;
 		tomtom_p->dai[dai->id].bit_width = 24;
 		break;
@@ -5884,6 +5936,7 @@ static void tomtom_set_tx_sb_port_format(struct snd_pcm_hw_params *params,
 		tomtom_p->dai[dai->id].bit_width = 16;
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
+	case SNDRV_PCM_FORMAT_S24_3LE:
 		bit_sel = 0x0;
 		tomtom_p->dai[dai->id].bit_width = 24;
 		break;
@@ -5998,6 +6051,7 @@ static int tomtom_hw_params(struct snd_pcm_substream *substream,
 			tomtom->dai[dai->id].bit_width = 16;
 			break;
 		case SNDRV_PCM_FORMAT_S24_LE:
+		case SNDRV_PCM_FORMAT_S24_3LE:
 			tomtom->dai[dai->id].bit_width = 24;
 			i2s_bit_mode = 0x00;
 			break;
@@ -6098,7 +6152,7 @@ static struct snd_soc_dai_driver tomtom_dai[] = {
 		.capture = {
 			.stream_name = "AIF1 Capture",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -6126,7 +6180,7 @@ static struct snd_soc_dai_driver tomtom_dai[] = {
 		.capture = {
 			.stream_name = "AIF2 Capture",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -6154,7 +6208,7 @@ static struct snd_soc_dai_driver tomtom_dai[] = {
 		.capture = {
 			.stream_name = "AIF3 Capture",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 48000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -6199,7 +6253,7 @@ static struct snd_soc_dai_driver tomtom_i2s_dai[] = {
 		.playback = {
 			.stream_name = "AIF1 Playback",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -6213,7 +6267,7 @@ static struct snd_soc_dai_driver tomtom_i2s_dai[] = {
 		.capture = {
 			.stream_name = "AIF1 Capture",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -6227,7 +6281,7 @@ static struct snd_soc_dai_driver tomtom_i2s_dai[] = {
 		.playback = {
 			.stream_name = "AIF2 Playback",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -6241,7 +6295,7 @@ static struct snd_soc_dai_driver tomtom_i2s_dai[] = {
 		.capture = {
 			.stream_name = "AIF2 Capture",
 			.rates = WCD9330_RATES,
-			.formats = TOMTOM_FORMATS,
+			.formats = TOMTOM_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -8346,7 +8400,7 @@ static void tomtom_compute_impedance(struct wcd9xxx_mbhc *mbhc, s16 *l, s16 *r,
 	struct tomtom_priv *tomtom;
 
 	if (!mbhc) {
-		pr_err("%s: Invalid parameters mbhc = %p\n",
+		pr_err("%s: Invalid parameters mbhc = %pK\n",
 			__func__,  mbhc);
 		return;
 	}
@@ -8405,7 +8459,7 @@ static void tomtom_zdet_error_approx(struct wcd9xxx_mbhc *mbhc, uint32_t *zl,
 	const int shift = TOMTOM_ZDET_ERROR_APPROX_SHIFT;
 
 	if (!zl || !zr || !mbhc) {
-		pr_err("%s: Invalid parameters zl = %p zr = %p, mbhc = %p\n",
+		pr_err("%s: Invalid parameters zl = %pK zr = %pK, mbhc = %pK\n",
 			__func__, zl, zr, mbhc);
 		return;
 	}
